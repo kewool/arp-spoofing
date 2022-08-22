@@ -1,8 +1,8 @@
 LDLIBS=-lpcap -lpthread
 
-all: send-arp-test
+all: arp_spoofing
 
-send-arp-test: main.o
+arp_spoofing: main.o
 	$(LINK.cc) $^ $(LOADLIBES) $(LDLIBS) -o $@
 	rm -f *.o
 
