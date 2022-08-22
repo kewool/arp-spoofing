@@ -169,6 +169,8 @@ void *arp_thread(void* packet) {
             for(int i = 0; i < 2; i++)
                 pcap_sendpacket(handle, (const u_char*)&table->packet[i], sizeof(table->packet[i]));
         }
+        res = NULL;
+        sleep(1);
     }
     return NULL;
 }
