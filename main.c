@@ -165,12 +165,11 @@ void *arp_thread(void* packet) {
                 }
                 pcap_sendpacket(handle, (const u_char*)&res, sizeof(res));
             }
-        if(res[12] == 0x08 && res[13] == 0x06) {
-            for(int i = 0; i < 2; i++)
-                pcap_sendpacket(handle, (const u_char*)&table->packet[i], sizeof(table->packet[i]));
+        if(res[12] == 0x08 && res[13] == 0x06 && res[21] == 0x01) {
+                for(int i = 0; i < 2; i++)
+                    pcap_sendpacket(handle, (const u_char*)&table->packet[i], sizeof(table->packet[i]));
         }
         res = NULL;
-        sleep(1);
     }
     return NULL;
 }
